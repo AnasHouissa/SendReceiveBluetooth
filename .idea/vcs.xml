@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$/Fall_Detection" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/OSMDroidOfflineDemo" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/OSMDroidOfflineDemoo" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SpeedView" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/accelerometer2influx" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/influxdb-android" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/java_leaflet" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/sundroid1" vcs="Git" />
+  </component>
+</project>
