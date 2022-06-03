@@ -42,10 +42,8 @@ import java.util.UUID;
 public class BluetoothChatService {
     // Debugging
     private static final String TAG = "BluetoothChatService";
-
     // Name for the SDP record when creating server socket
     private static final String NAME_SECURE = "BluetoothChatSecure";
-
     // Unique UUID for this application
     private static final UUID MY_UUID_SECURE =
             UUID.fromString("1b0eb1dd-ca45-4efa-8a94-2cdc2e0d855a");
@@ -53,7 +51,6 @@ public class BluetoothChatService {
     // Member fields
     private final BluetoothAdapter mAdapter;
     private final Handler mHandler;
-    private AcceptThread mSecureAcceptThread;
     private ConnectThread mConnectThread;
     private ConnectedThread mConnectedThread;
     private int mState;
@@ -104,14 +101,6 @@ public class BluetoothChatService {
             mConnectedThread.cancel();
             mConnectedThread = null;
         }
-
-        // Start the thread to listen on a BluetoothServerSocket
-        if (mSecureAcceptThread == null) {
-            mSecureAcceptThread = new AcceptThread(true);
-            mSecureAcceptThread.start();
-        }
-        // Update UI title
-        //change updateUserInterfaceTitle();
     }
 
     /**
@@ -168,10 +157,7 @@ public class BluetoothChatService {
         }
 
         // Cancel the accept thread because we only want to connect to one device
-        if (mSecureAcceptThread != null) {
-            mSecureAcceptThread.cancel();
-            mSecureAcceptThread = null;
-        }
+
 
 
         // Start the thread to manage the connection and perform transmissions
@@ -203,163 +189,24 @@ public class BluetoothChatService {
             mConnectedThread = null;
         }
 
-        if (mSecureAcceptThread != null) {
-            mSecureAcceptThread.cancel();
-            mSecureAcceptThread = null;
-        }
+
 
         mState = STATE_NONE;
         // Update UI title
     }
-
-    /**
-     * Write to the ConnectedThread in an unsynchronized manner
-     *
-     * @param out The bytes to write
-     * @see ConnectedThread#write(byte[])
-     */
-    public void write(byte[] out) {
-        // Create temporary object
-        ConnectedThread r;
-        // Synchronize a copy of the ConnectedThread
-        synchronized (this) {
-            if (mState != STATE_CONNECTED) return;
-            r = mConnectedThread;
-        }
-        // Perform the write unsynchronized
-        r.write(out);
-    }
-
-    /**
-     * Indicate that the connection attempt failed and notify the UI Activity.
-     */
-    private void connectionFailed() {
-        // Send a failure message back to the Activity
-        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
-        Bundle bundle = new Bundle();
-        bundle.putString(Constants.TOAST, "Unable to connect device");
-        msg.setData(bundle);
-        mHandler.sendMessage(msg);
-
-        mState = STATE_NONE;
-        // Update UI title
-
-        // Start the service over to restart listening mode
-        BluetoothChatService.this.start();
-    }
-
-    /**
-     * Indicate that the connection was lost and notify the UI Activity.
-     */
-    private void connectionLost() {
-        // Send a failure message back to the Activity
-        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
-        Bundle bundle = new Bundle();
-        bundle.putString(Constants.TOAST, "Device connection was lost");
-        msg.setData(bundle);
-        mHandler.sendMessage(msg);
-
-        mState = STATE_NONE;
-        // Update UI title
-
-        // Start the service over to restart listening mode
-        BluetoothChatService.this.start();
-    }
-
-    /**
-     * This thread runs while listening for incoming connections. It behaves
-     * like a server-side client. It runs until a connection is accepted
-     * (or until cancelled).
-     */
-    private class AcceptThread extends Thread {
-        // The local server socket
-        private final BluetoothServerSocket mmServerSocket;
-        private String mSocketType;
-
-        @SuppressLint("MissingPermission")
-        public AcceptThread(boolean secure) {
-            BluetoothServerSocket tmp = null;
-            mSocketType = secure ? "Secure" : "Insecure";
-
-            // Create a new listening server socket
-            try {
-                tmp = mAdapter.listenUsingRfcommWithServiceRecord(NAME_SECURE,
-                        MY_UUID_SECURE);
-
-            } catch (IOException e) {
-                Log.e(TAG, "Socket Type: " + mSocketType + "listen() failed", e);
-            }
-            mmServerSocket = tmp;
-            mState = STATE_LISTEN;
-        }
-
-        public void run() {
-            Log.d(TAG, "Socket Type: " + mSocketType +
-                    "BEGIN mAcceptThread" + this);
-            setName("AcceptThread" + mSocketType);
-
-            BluetoothSocket socket;
-
-            // Listen to the server socket if we're not connected
-            while (mState != STATE_CONNECTED) {
-                try {
-                    // This is a blocking call and will only return on a
-                    // successful connection or an exception
-                    socket = mmServerSocket.accept();
-                } catch (IOException e) {
-                    Log.e(TAG, "Socket Type: " + mSocketType + "accept() failed", e);
-                    break;
-                }
-
-                // If a connection was accepted
-                if (socket != null) {
-                    synchronized (BluetoothChatService.this) {
-                        switch (mState) {
-                            case STATE_LISTEN:
-                            case STATE_CONNECTING:
-                                // Situation normal. Start the connected thread.
-                                connected(socket, socket.getRemoteDevice(),
-                                        mSocketType);
-                                break;
-                            case STATE_NONE:
-                            case STATE_CONNECTED:
-                                // Either not ready or already connected. Terminate new socket.
-                                try {
-                                    socket.close();
-                                } catch (IOException e) {
-                                    Log.e(TAG, "Could not close unwanted socket", e);
-                                }
-                                break;
-                        }
-                    }
-                }
-            }
-            Log.i(TAG, "END mAcceptThread, socket Type: " + mSocketType);
-
-        }
-
-        public void cancel() {
-            Log.d(TAG, "Socket Type" + mSocketType + "cancel " + this);
-            try {
-                mmServerSocket.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Socket Type" + mSocketType + "close() of server failed", e);
-            }
-        }
-    }
-
 
     /**
      * This thread runs while attempting to make an outgoing connection
      * with a device. It runs straight through; the connection either
      * succeeds or fails.
      */
+    @SuppressLint("MissingPermission")
+
     private class ConnectThread extends Thread {
         private final BluetoothSocket mmSocket;
         private final BluetoothDevice mmDevice;
         private String mSocketType;
 
-        @SuppressLint("MissingPermission")
         public ConnectThread(BluetoothDevice device, boolean secure) {
             mmDevice = device;
             BluetoothSocket tmp = null;
@@ -377,7 +224,6 @@ public class BluetoothChatService {
             mState = STATE_CONNECTING;
         }
 
-        @SuppressLint("MissingPermission")
         public void run() {
             Log.i(TAG, "BEGIN mConnectThread SocketType:" + mSocketType);
             setName("ConnectThread" + mSocketType);
@@ -418,6 +264,41 @@ public class BluetoothChatService {
                 Log.e(TAG, "close() of connect " + mSocketType + " socket failed", e);
             }
         }
+    }
+    /**
+     * Indicate that the connection was lost and notify the UI Activity.
+     */
+    private void connectionLost() {
+        // Send a failure message back to the Activity
+        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
+        Bundle bundle = new Bundle();
+        bundle.putString(Constants.TOAST, "Device connection was lost");
+        msg.setData(bundle);
+        mHandler.sendMessage(msg);
+
+        mState = STATE_NONE;
+        // Update UI title
+
+        // Start the service over to restart listening mode
+        BluetoothChatService.this.start();
+    }
+
+    /**
+     * Indicate that the connection attempt failed and notify the UI Activity.
+     */
+    private void connectionFailed() {
+        // Send a failure message back to the Activity
+        Message msg = mHandler.obtainMessage(Constants.MESSAGE_TOAST);
+        Bundle bundle = new Bundle();
+        bundle.putString(Constants.TOAST, "Unable to connect device");
+        msg.setData(bundle);
+        mHandler.sendMessage(msg);
+
+        mState = STATE_NONE;
+        // Update UI title
+
+        // Start the service over to restart listening mode
+        BluetoothChatService.this.start();
     }
 
     /**

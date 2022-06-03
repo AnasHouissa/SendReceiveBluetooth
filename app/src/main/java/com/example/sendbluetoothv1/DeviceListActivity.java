@@ -153,7 +153,7 @@ public class DeviceListActivity extends Activity {
         // Indicate scanning in the title
         setProgressBarIndeterminateVisibility(true);
         setTitle("Scanning ...");
-
+        mNewDevicesArrayAdapter.clear();
         // Turn on sub-title for new devices
         findViewById(R.id.title_new_devices).setVisibility(View.VISIBLE);
 
@@ -163,7 +163,8 @@ public class DeviceListActivity extends Activity {
         }
 
         // Request discover from BluetoothAdapter
-        mBtAdapter.startDiscovery();
+        Log.d(TAG,mBtAdapter.startDiscovery()+"")
+        ;
     }
 
     /**

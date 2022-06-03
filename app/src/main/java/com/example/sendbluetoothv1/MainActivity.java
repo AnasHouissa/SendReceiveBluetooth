@@ -10,12 +10,15 @@ import androidx.fragment.app.FragmentActivity;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -62,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
                 if (bluetoothAdapter == null) {
                     Toast.makeText(MainActivity.this, "Device doesn't support bluetooth", Toast.LENGTH_SHORT).show();
                 } else {
+
                     //check if bluetooth is enabled
                     if (!bluetoothAdapter.isEnabled()) {
                         Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
@@ -69,9 +73,13 @@ public class MainActivity extends AppCompatActivity {
                         startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
 
                     } else {
-                        Toast.makeText(MainActivity.this, "Access Granted", Toast.LENGTH_SHORT).show();
-                        Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                        startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                        final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                            buildAlertMessageNoGps();
+                        } else {
+                            Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                        }
                     }
                 }
             }
@@ -93,9 +101,14 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == 12) {
             //check if bluetooth granted ( if reslt code = 0 then no )
             if (resultCode != 0) {
-                Toast.makeText(this, "Access Granted", Toast.LENGTH_SHORT).show();
-                Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    buildAlertMessageNoGps();
+                } else {
+                    Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                    startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                }
+
             } else {
                 Toast.makeText(this, "The app requires bluetooth permission", Toast.LENGTH_SHORT).show();
             }
@@ -206,4 +219,22 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    private void buildAlertMessageNoGps() {
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage("Your have to enable your GPS!")
+                .setCancelable(false)
+                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                    public void onClick(final DialogInterface dialog, final int id) {
+                        startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                    }
+                })
+                .setNegativeButton("No", new DialogInterface.OnClickListener() {
+                    public void onClick(final DialogInterface dialog, final int id) {
+                        dialog.cancel();
+                    }
+                });
+        final AlertDialog alert = builder.create();
+        alert.show();
+    }
 }
