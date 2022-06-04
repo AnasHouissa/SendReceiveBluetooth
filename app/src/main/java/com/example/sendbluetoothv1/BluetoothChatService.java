@@ -196,6 +196,23 @@ public class BluetoothChatService {
     }
 
     /**
+     * Write to the ConnectedThread in an unsynchronized manner
+     *
+     * @param out The bytes to write
+     * @see ConnectedThread#write(byte[])
+     */
+    public void write(byte[] out) {
+        // Create temporary object
+        ConnectedThread r;
+        // Synchronize a copy of the ConnectedThread
+        synchronized (this) {
+            if (mState != STATE_CONNECTED) return;
+            r = mConnectedThread;
+        }
+        // Perform the write unsynchronized
+        r.write(out);
+    }
+    /**
      * This thread runs while attempting to make an outgoing connection
      * with a device. It runs straight through; the connection either
      * succeeds or fails.
@@ -311,7 +328,6 @@ public class BluetoothChatService {
         private final OutputStream mmOutStream;
 
         public ConnectedThread(BluetoothSocket socket, String socketType) {
-            Log.d(TAG, "create ConnectedThread: " + socketType);
             mmSocket = socket;
             InputStream tmpIn = null;
             OutputStream tmpOut = null;
@@ -330,9 +346,8 @@ public class BluetoothChatService {
         }
 
         public void run() {
-            Log.i(TAG, "BEGIN mConnectedThread");
             byte[] buffer = new byte[1024];
-            int bytes;
+            int bytes; // bytes returned from read()
 
             // Keep listening to the InputStream while connected
             while (mState == STATE_CONNECTED) {
@@ -352,7 +367,7 @@ public class BluetoothChatService {
         }
 
         /**
-         * Write to the connected OutStream.
+         * send data to the remote device.
          *
          * @param buffer The bytes to write
          */

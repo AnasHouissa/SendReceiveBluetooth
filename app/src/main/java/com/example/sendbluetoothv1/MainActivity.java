@@ -2,6 +2,7 @@ package com.example.sendbluetoothv1;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -30,21 +31,35 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResponse;
+import com.google.android.gms.location.SettingsClient;
+import com.google.android.gms.tasks.Task;
+
+import java.util.Arrays;
+
 public class MainActivity extends AppCompatActivity {
 
-    private BluetoothChatService mChatService = null;
 
+    /**
+     * String buffer for outgoing messages
+     */
+    private StringBuffer mOutStringBuffer;
+
+    private BluetoothChatService mChatService = null;
     /**
      * Array adapter for the conversation thread
      */
-
     private String mConnectedDeviceName = null;
 
-
+    int REQUEST_CODE_LOCATION_PERMISSION = 9;
     int REQUEST_CONNECT_DEVICE_SECURE = 1;
     int REQUEST_ENABLE_BT = 12;
-
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+    EditText et_name;
+    TextView tv_state;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,9 +67,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        EditText et_name = findViewById(R.id.et_name);
         Button btn_send = findViewById(R.id.btn_send);
-        Button btn_connect = findViewById(R.id.btn_connect);
 
         btn_send.setOnClickListener(new View.OnClickListener() {
             @SuppressLint("MissingPermission")
@@ -73,23 +86,36 @@ public class MainActivity extends AppCompatActivity {
                         startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
 
                     } else {
-                        final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                            buildAlertMessageNoGps();
+                        // app location permission granted but not turned on
+                        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.
+                                permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission
+                                    .ACCESS_FINE_LOCATION}, REQUEST_CODE_LOCATION_PERMISSION
+                            );
                         } else {
-                            Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                            //check if location is on
+                            final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                            if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                                buildAlertMessageNoGps();
+                            } else {
+                                if (mChatService != null && mChatService.getState() == 3) {
+                                    //send text to remote device
+                                    et_name = findViewById(R.id.et_name);
+                                    String dataToSend = et_name.getText().toString();
+                                    Toast.makeText(getApplicationContext(), dataToSend, Toast.LENGTH_SHORT).show();
+                                    sendData(dataToSend);
+                                } else {
+                                    Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                                    startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                                }
+
+                            }
                         }
                     }
                 }
             }
         });
-        btn_connect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
 
-            }
-        });
     }
 
     //if permission granted or not nresult
@@ -101,12 +127,22 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == 12) {
             //check if bluetooth granted ( if reslt code = 0 then no )
             if (resultCode != 0) {
-                final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                    buildAlertMessageNoGps();
+                if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.
+                        permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission
+                            .ACCESS_FINE_LOCATION}, REQUEST_CODE_LOCATION_PERMISSION
+                    );
                 } else {
-                    Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                    startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                    if (mChatService != null && mChatService.getState() == 3) {
+                        //send text to remote device
+                        et_name = findViewById(R.id.et_name);
+                        String dataToSend = et_name.getText().toString();
+                        Toast.makeText(getApplicationContext(), dataToSend, Toast.LENGTH_SHORT).show();
+                        sendData(dataToSend);
+                    } else {
+                        Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                        startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                    }
                 }
 
             } else {
@@ -115,6 +151,23 @@ public class MainActivity extends AppCompatActivity {
         } else if (requestCode == 1) {
             if (resultCode == Activity.RESULT_OK) {
                 connectDevice(data, true);
+
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_LOCATION_PERMISSION && grantResults.length > 0) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                Toast.makeText(MainActivity.this, "Permission Granted", Toast.LENGTH_SHORT).show();
+                if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    buildAlertMessageNoGps();
+                }
+            } else {
+                Toast.makeText(MainActivity.this, "Permission Denied", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -129,6 +182,9 @@ public class MainActivity extends AppCompatActivity {
         if (mChatService == null) {
             // Initialize the BluetoothChatService to perform bluetooth connections
             mChatService = new BluetoothChatService(getApplicationContext(), mHandler);
+            // Initialize the buffer for outgoing messages
+            mOutStringBuffer = new StringBuffer();
+
         }
 
 
@@ -174,21 +230,29 @@ public class MainActivity extends AppCompatActivity {
      */
     @SuppressLint("HandlerLeak")
     private final Handler mHandler = new Handler() {
+        @SuppressLint("SetTextI18n")
         @Override
         public void handleMessage(Message msg) {
+            tv_state = findViewById(R.id.tv_state);
             Context activity = getApplicationContext();
             switch (msg.what) {
                 case Constants.MESSAGE_STATE_CHANGE:
                     switch (msg.arg1) {
                         case BluetoothChatService.STATE_CONNECTED:
                             Toast.makeText(activity, "Connected to " + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                            // set state text
+                            tv_state.setText("State : Connected to " + mConnectedDeviceName);
                             break;
                         case BluetoothChatService.STATE_CONNECTING:
                             Toast.makeText(activity, "Connecting", Toast.LENGTH_SHORT).show();
+                            // set state text
+                            tv_state.setText("State : Connecting ");
                             break;
                         case BluetoothChatService.STATE_LISTEN:
                         case BluetoothChatService.STATE_NONE:
                             Toast.makeText(activity, "Not Connected", Toast.LENGTH_SHORT).show();
+                            // set state text
+                            tv_state.setText("State : Not connected ");
                             break;
                     }
                     break;
@@ -208,12 +272,21 @@ public class MainActivity extends AppCompatActivity {
                     if (null != activity) {
                         Toast.makeText(activity, "Connected to "
                                 + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                        // set state text
+                        tv_state.setText("State : Connected to " + mConnectedDeviceName);
+                        //send text to remote device
+                        et_name = findViewById(R.id.et_name);
+                        String dataToSend = et_name.getText().toString();
+                        Toast.makeText(activity, dataToSend, Toast.LENGTH_SHORT).show();
+                        sendData(dataToSend);
                     }
                     break;
                 case Constants.MESSAGE_TOAST:
                     if (null != activity) {
                         Toast.makeText(activity, msg.getData().getString(Constants.TOAST),
                                 Toast.LENGTH_SHORT).show();
+                        tv_state.setText("State : Not connected ");
+
                     }
                     break;
             }
@@ -222,7 +295,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void buildAlertMessageNoGps() {
         final AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setMessage("Your have to enable your GPS!")
+        builder.setMessage("You have to enable your GPS!")
                 .setCancelable(false)
                 .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                     public void onClick(final DialogInterface dialog, final int id) {
@@ -236,5 +309,23 @@ public class MainActivity extends AppCompatActivity {
                 });
         final AlertDialog alert = builder.create();
         alert.show();
+
+    }
+
+    /**
+     * Sends a message.
+     *
+     * @param message A string of text to send.
+     */
+    private void sendData(String message) {
+        // Get the message bytes and tell the BluetoothChatService to write
+        byte[] send = message.getBytes();
+        mChatService.write(send);
+
+        // Reset out string buffer to zero and clear the edit text field
+        mOutStringBuffer.setLength(0);
+        et_name = findViewById(R.id.et_name);
+        et_name.setText(mOutStringBuffer);
+
     }
 }
