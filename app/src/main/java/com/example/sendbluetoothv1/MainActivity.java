@@ -23,6 +23,7 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -144,8 +145,9 @@ public class MainActivity extends AppCompatActivity {
                         if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                             buildAlertMessageNoGps();
                         } else {
-                        Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                        startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);}
+                            Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                        }
                     }
                 }
 
@@ -212,11 +214,7 @@ public class MainActivity extends AppCompatActivity {
         if (mChatService != null) {
             mChatService.stop();
         }
-        Intent intent = new Intent("android.location.GPS_ENABLED_CHANGE");
-        intent.putExtra("enabled", false);
-        sendBroadcast(intent);
         bluetoothAdapter.disable();
-
     }
 
     @Override
@@ -337,8 +335,7 @@ public class MainActivity extends AppCompatActivity {
             mOutStringBuffer.setLength(0);
             et_name = findViewById(R.id.et_name);
             et_name.setText(mOutStringBuffer);
-        }
-        else{
+        } else {
             Toast.makeText(getApplicationContext(), "Can't send empty data",
                     Toast.LENGTH_SHORT).show();
         }
