@@ -102,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
                                     //send text to remote device
                                     et_name = findViewById(R.id.et_name);
                                     String dataToSend = et_name.getText().toString();
-                                    Toast.makeText(getApplicationContext(), dataToSend, Toast.LENGTH_SHORT).show();
                                     sendData(dataToSend);
                                 } else {
                                     Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
@@ -133,15 +132,20 @@ public class MainActivity extends AppCompatActivity {
                             .ACCESS_FINE_LOCATION}, REQUEST_CODE_LOCATION_PERMISSION
                     );
                 } else {
+
                     if (mChatService != null && mChatService.getState() == 3) {
                         //send text to remote device
                         et_name = findViewById(R.id.et_name);
                         String dataToSend = et_name.getText().toString();
-                        Toast.makeText(getApplicationContext(), dataToSend, Toast.LENGTH_SHORT).show();
                         sendData(dataToSend);
                     } else {
+                        //check if location is on
+                        final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                            buildAlertMessageNoGps();
+                        } else {
                         Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                        startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+                        startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);}
                     }
                 }
 
@@ -201,12 +205,18 @@ public class MainActivity extends AppCompatActivity {
         mChatService.connect(device, secure);
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void onDestroy() {
         super.onDestroy();
         if (mChatService != null) {
             mChatService.stop();
         }
+        Intent intent = new Intent("android.location.GPS_ENABLED_CHANGE");
+        intent.putExtra("enabled", false);
+        sendBroadcast(intent);
+        bluetoothAdapter.disable();
+
     }
 
     @Override
@@ -277,7 +287,6 @@ public class MainActivity extends AppCompatActivity {
                         //send text to remote device
                         et_name = findViewById(R.id.et_name);
                         String dataToSend = et_name.getText().toString();
-                        Toast.makeText(activity, dataToSend, Toast.LENGTH_SHORT).show();
                         sendData(dataToSend);
                     }
                     break;
@@ -318,14 +327,21 @@ public class MainActivity extends AppCompatActivity {
      * @param message A string of text to send.
      */
     private void sendData(String message) {
-        // Get the message bytes and tell the BluetoothChatService to write
-        byte[] send = message.getBytes();
-        mChatService.write(send);
+        if (message.length() > 0) {
 
-        // Reset out string buffer to zero and clear the edit text field
-        mOutStringBuffer.setLength(0);
-        et_name = findViewById(R.id.et_name);
-        et_name.setText(mOutStringBuffer);
+            // Get the message bytes and tell the BluetoothChatService to write
+            byte[] send = message.getBytes();
+            mChatService.write(send);
 
+            // Reset out string buffer to zero and clear the edit text field
+            mOutStringBuffer.setLength(0);
+            et_name = findViewById(R.id.et_name);
+            et_name.setText(mOutStringBuffer);
+        }
+        else{
+            Toast.makeText(getApplicationContext(), "Can't send empty data",
+                    Toast.LENGTH_SHORT).show();
+        }
     }
+
 }
