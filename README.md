@@ -1,2 +1,2 @@
 # SendReceiveBluetooth
-Sample for sending and receiving texts using bluetooth.
+Mobile app to send and receive text via Bluetooth.
