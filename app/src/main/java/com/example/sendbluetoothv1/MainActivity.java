@@ -29,6 +29,7 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -40,6 +41,9 @@ import com.google.android.gms.location.SettingsClient;
 import com.google.android.gms.tasks.Task;
 
 import java.util.Arrays;
+import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -55,20 +59,96 @@ public class MainActivity extends AppCompatActivity {
      */
     private String mConnectedDeviceName = null;
 
-    int REQUEST_CODE_LOCATION_PERMISSION = 9;
-    int REQUEST_CONNECT_DEVICE_SECURE = 1;
-    int REQUEST_ENABLE_BT = 12;
+
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-    EditText et_name;
-    TextView tv_state;
+    private EditText et_name;
+    private TextView tv_state,msg_tv;
+    private Switch onOff_switch;
+    private Button discoverable_btn,btn_send;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        onOff_switch = findViewById(R.id.onOff_switch);
+        discoverable_btn = findViewById(R.id.discoverable_btn);
+        msg_tv = findViewById(R.id.msg_tv);
+        btn_send = findViewById(R.id.btn_send);
+        et_name = findViewById(R.id.et_name);
+
+        //check if device supports bluetooth; if it does, then check bluetooth on/off and set switch checked/unchecked
+        if (bluetoothAdapter == null) {
+            Toast.makeText(getApplicationContext(), "This device doesn't support Bluetooth", Toast.LENGTH_SHORT).show();
+            finish();
+        } else {
+            //check bt state in bg
+            checkBTStateBG();
 
 
-        Button btn_send = findViewById(R.id.btn_send);
+            if (bluetoothAdapter.isEnabled()) {
+                onOff_switch.setChecked(true);
+                onOff_switch.setText("Turn off Bluetooth");
+            } else {
+                if(mChatService!=null){
+                    mChatService.stop();
+                }
+                onOff_switch.setChecked(false);
+                onOff_switch.setText("Turn on Bluetooth");
+            }
+            // all activity's click listeners
+            clickListenersSetUp();
+        }
+
+    }
+
+    private void checkBTStateBG() {
+        Timer timer = new Timer();
+        TimerTask myTask = new TimerTask() {
+            @Override
+            public void run() {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (bluetoothAdapter.isEnabled() && !onOff_switch.isChecked()) {
+                            onOff_switch.setChecked(true);
+                            onOff_switch.setText("Turn off Bluetooth");
+                        } else if (!bluetoothAdapter.isEnabled() && onOff_switch.isChecked()) {
+                            if(mChatService!=null){
+                                mChatService.stop();
+                            }
+                            onOff_switch.setChecked(false);
+                            onOff_switch.setText("Turn on Bluetooth");
+                        }
+                    }
+                });
+            }
+        };
+        timer.schedule(myTask, 1000, 1000);
+    }
+
+    private void clickListenersSetUp() {
+        //check state and turn on/off bluetooth
+        onOff_switch.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (onOff_switch.isChecked()) {
+                    turnOnBT();
+                } else {
+                    turnOffBT();
+                }
+            }
+        });
+
+        //enable discover mode
+        discoverable_btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                makeDiscoverable();
+                mChatService=new BluetoothChatService(getApplicationContext(),mHandler); //here
+                //AccpetThread accpetThread = new AccpetThread();
+                //accpetThread.start();
+            }
+        });
 
         btn_send.setOnClickListener(new View.OnClickListener() {
             @SuppressLint("MissingPermission")
@@ -84,14 +164,14 @@ public class MainActivity extends AppCompatActivity {
                     if (!bluetoothAdapter.isEnabled()) {
                         Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                         //display bluetooth permission
-                        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                        startActivityForResult(enableBtIntent, Constants.REQUEST_ENABLE_BT);
 
                     } else {
                         // app location permission granted but not turned on
                         if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.
                                 permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission
-                                    .ACCESS_FINE_LOCATION}, REQUEST_CODE_LOCATION_PERMISSION
+                                    .ACCESS_FINE_LOCATION}, Constants.REQUEST_CODE_LOCATION_PERMISSION
                             );
                         } else {
                             //check if location is on
@@ -99,22 +179,60 @@ public class MainActivity extends AppCompatActivity {
                             if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                                 buildAlertMessageNoGps();
                             } else {
-                                if (mChatService != null && mChatService.getState() == 3) {
-                                    //send text to remote device
-                                    et_name = findViewById(R.id.et_name);
-                                    String dataToSend = et_name.getText().toString();
-                                    sendData(dataToSend);
-                                } else {
-                                    Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                                    startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
-                                }
 
+                                if (mChatService != null && mChatService.getState() == Constants.STATE_CONNECTED) {
+                                    if(!et_name.getText().toString().isEmpty()){
+                                        //send text to remote device
+                                        String dataToSend = et_name.getText().toString();
+                                        sendData(dataToSend);
+                                    }else{
+                                        Toast.makeText(getApplicationContext(), "Can't send empty data", Toast.LENGTH_SHORT).show();
+                                    }
+
+                                }
+                                else {
+                                    Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
+                                    startActivityForResult(serverIntent, Constants.REQUEST_CONNECT_DEVICE_SECURE);
+                                }
                             }
                         }
                     }
                 }
             }
         });
+    }
+
+    private void turnOffBT() {
+        if(mChatService!=null){
+            mChatService.stop();
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            bluetoothAdapter.disable();
+        }
+        Toast.makeText(MainActivity.this, "Bluetooth off", Toast.LENGTH_SHORT).show();
+        onOff_switch.setText("Turn on Bluetooth");
+    }
+
+    private void turnOnBT() {
+        Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        //display bluetooth permission
+        if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            startActivityForResult(enableBtIntent, Constants.REQUEST_ENABLE_BT);
+        }
+    }
+
+
+
+    private void makeDiscoverable() {
+        onOff_switch.setChecked(true);
+        onOff_switch.setText("Turn off Bluetooth");
+        Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
+        if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            if (!bluetoothAdapter.isDiscovering()) {
+                startActivityForResult(discoverableIntent, Constants.REQUEST_ENABLE_DISCOVERABLE);
+            }
+        }
 
     }
 
@@ -124,19 +242,18 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         // check if the request permission code is same as already declared 12
 
-        if (requestCode == 12) {
+        if (requestCode == Constants.REQUEST_ENABLE_BT) {
             //check if bluetooth granted ( if reslt code = 0 then no )
-            if (resultCode != 0) {
+            if (resultCode ==Activity.RESULT_OK) {
                 if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.
                         permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission
-                            .ACCESS_FINE_LOCATION}, REQUEST_CODE_LOCATION_PERMISSION
+                            .ACCESS_FINE_LOCATION}, Constants.REQUEST_CODE_LOCATION_PERMISSION
                     );
                 } else {
 
-                    if (mChatService != null && mChatService.getState() == 3) {
+                    if (mChatService != null && mChatService.getState() == Constants.STATE_CONNECTED) {
                         //send text to remote device
-                        et_name = findViewById(R.id.et_name);
                         String dataToSend = et_name.getText().toString();
                         sendData(dataToSend);
                     } else {
@@ -144,9 +261,6 @@ public class MainActivity extends AppCompatActivity {
                         final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
                         if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                             buildAlertMessageNoGps();
-                        } else {
-                            Intent serverIntent = new Intent(getApplicationContext(), DeviceListActivity.class);
-                            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
                         }
                     }
                 }
@@ -154,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, "The app requires bluetooth permission", Toast.LENGTH_SHORT).show();
             }
-        } else if (requestCode == 1) {
+        } else if (requestCode == Constants.REQUEST_CONNECT_DEVICE_SECURE) {
             if (resultCode == Activity.RESULT_OK) {
                 connectDevice(data, true);
 
@@ -165,7 +279,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CODE_LOCATION_PERMISSION && grantResults.length > 0) {
+        if (requestCode == Constants.REQUEST_CODE_LOCATION_PERMISSION && grantResults.length > 0) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
                 Toast.makeText(MainActivity.this, "Permission Granted", Toast.LENGTH_SHORT).show();
@@ -226,7 +340,7 @@ public class MainActivity extends AppCompatActivity {
         // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
         if (mChatService != null) {
             // Only if the state is STATE_NONE, do we know that we haven't started already
-            if (mChatService.getState() == BluetoothChatService.STATE_NONE) {
+            if (mChatService.getState() == Constants.STATE_NONE) {
                 // Start the Bluetooth chat services
                 mChatService.start();
             }
@@ -246,19 +360,19 @@ public class MainActivity extends AppCompatActivity {
             switch (msg.what) {
                 case Constants.MESSAGE_STATE_CHANGE:
                     switch (msg.arg1) {
-                        case BluetoothChatService.STATE_CONNECTED:
+                        case Constants.STATE_CONNECTED:
                             Toast.makeText(activity, "Connected to " + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
                             // set state text
                             tv_state.setText("State : Connected to " + mConnectedDeviceName);
                             break;
-                        case BluetoothChatService.STATE_CONNECTING:
+                        case Constants.STATE_CONNECTING:
                             Toast.makeText(activity, "Connecting", Toast.LENGTH_SHORT).show();
                             // set state text
                             tv_state.setText("State : Connecting ");
                             break;
-                        case BluetoothChatService.STATE_LISTEN:
-                        case BluetoothChatService.STATE_NONE:
-                            Toast.makeText(activity, "Not Connected", Toast.LENGTH_SHORT).show();
+                        case Constants.STATE_LISTEN:
+                            tv_state.setText("State : Listening ");
+                        case Constants.STATE_NONE:
                             // set state text
                             tv_state.setText("State : Not connected ");
                             break;
@@ -267,23 +381,19 @@ public class MainActivity extends AppCompatActivity {
                 case Constants.MESSAGE_WRITE:
                     byte[] writeBuf = (byte[]) msg.obj;
                     // construct a string from the buffer
-                    String writeMessage = new String(writeBuf);
+                    //String writeMessage = new String(writeBuf);
                     break;
                 case Constants.MESSAGE_READ:
-                    byte[] readBuf = (byte[]) msg.obj;
+                    byte[] readBuff= (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
-                    String readMessage = new String(readBuf, 0, msg.arg1);
+                    String tempMsg=new String(readBuff,0,msg.arg1);
+                    msg_tv.setText(tempMsg);
                     break;
                 case Constants.MESSAGE_DEVICE_NAME:
                     // save the connected device's name
                     mConnectedDeviceName = msg.getData().getString(Constants.DEVICE_NAME);
                     if (null != activity) {
-                        Toast.makeText(activity, "Connected to "
-                                + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
-                        // set state text
-                        tv_state.setText("State : Connected to " + mConnectedDeviceName);
                         //send text to remote device
-                        et_name = findViewById(R.id.et_name);
                         String dataToSend = et_name.getText().toString();
                         sendData(dataToSend);
                     }
@@ -332,12 +442,8 @@ public class MainActivity extends AppCompatActivity {
             mChatService.write(send);
 
             // Reset out string buffer to zero and clear the edit text field
-            mOutStringBuffer.setLength(0);
-            et_name = findViewById(R.id.et_name);
-            et_name.setText(mOutStringBuffer);
-        } else {
-            Toast.makeText(getApplicationContext(), "Can't send empty data",
-                    Toast.LENGTH_SHORT).show();
+            //mOutStringBuffer.setLength(0);
+            et_name.setText("");
         }
     }
 

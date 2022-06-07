@@ -28,6 +28,20 @@ public interface Constants {
     int MESSAGE_DEVICE_NAME = 4;
     int MESSAGE_TOAST = 5;
 
+
+    int REQUEST_CODE_LOCATION_PERMISSION = 10;
+    int REQUEST_CONNECT_DEVICE_SECURE = 20;
+    int REQUEST_ENABLE_BT = 30;
+    int REQUEST_ENABLE_DISCOVERABLE = 40;
+
+    // Constants that indicate the current connection state
+    int STATE_NONE = 100;       // we're doing nothing
+    int STATE_LISTEN = 200;     // now listening for incoming connections
+    int STATE_CONNECTING = 300; // now initiating an outgoing connection
+    int STATE_CONNECTED = 400;  // now connected to a remote device
+
+
+
     // Key names received from the BluetoothChatService Handler
     String DEVICE_NAME = "device_name";
     String TOAST = "toast";

@@ -35,6 +35,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 
+import java.util.ArrayList;
 import java.util.Set;
 
 /**
@@ -65,6 +66,8 @@ public class DeviceListActivity extends Activity {
      */
     private ArrayAdapter<String> mNewDevicesArrayAdapter;
     Button scanButton;
+
+    private ArrayList<String> testList = new ArrayList<>();
 
     @SuppressLint("MissingPermission")
     @Override
@@ -127,6 +130,10 @@ public class DeviceListActivity extends Activity {
             String noDevices = "No Paired Devices";
             pairedDevicesArrayAdapter.add(noDevices);
         }
+    }
+
+    public static boolean deviceExists(ArrayList<String> arrayList, String deviceName) {
+        return arrayList.contains(deviceName);
     }
 
     @SuppressLint("MissingPermission")
@@ -204,7 +211,9 @@ public class DeviceListActivity extends Activity {
                 // Get the BluetoothDevice object from the Intent
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 // If it's already paired, skip it, because it's been listed already
-                if (device != null && device.getBondState() != BluetoothDevice.BOND_BONDED) {
+                String deviceData=device.getName() + " " + device.getAddress();
+                if (device != null && device.getBondState() != BluetoothDevice.BOND_BONDED && !deviceExists(testList,deviceData)) {
+                    testList.add(deviceData);
                     mNewDevicesArrayAdapter.add(device.getName() + "\n" + device.getAddress());
                 }
                 // When discovery is finished, change the Activity title
